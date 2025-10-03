@@ -138,13 +138,22 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
+    // Envoyer un message
     function sendMessage() {
       const nom = document.getElementById('nom').value;
       const texte = document.getElementById('message').value;
       if (!nom || !texte) return alert('Remplissez les deux champs !');
-      db.collection('messagesweb').add({auteur: nom, texte: texte, date: firebase.firestore.FieldValue.serverTimestamp()})
-        .then(() => { alert('Message envoyé !'); document.getElementById('nom').value=''; document.getElementById('message').value=''; })
-        .catch(err => alert('Erreur: '+err));
+      db.collection('messagesweb').add({
+        auteur: nom,
+        texte: texte,
+        date: firebase.firestore.FieldValue.serverTimestamp()
+      })
+      .then(() => {
+        alert('Message envoyé !');
+        document.getElementById('nom').value='';
+        document.getElementById('message').value='';
+      })
+      .catch(err => alert('Erreur: '+err));
     }
 
     // Appel
@@ -153,6 +162,8 @@
 
     function startCall() {
       const caller = document.getElementById('callerName').value || 'Quelqu’un';
+
+      // 1️⃣ Affichage pop-up local
       document.getElementById('callTitle').innerText = `Appel de ${caller}`;
       document.getElementById('callPopup').style.display = 'block';
       seconds = 0;
@@ -161,6 +172,14 @@
         seconds++;
         updateTimer();
       }, 1000);
+
+      // 2️⃣ Créer un document dans Firestore pour que l'app Android détecte l'appel
+      db.collection('calls').add({
+        caller: caller,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+      })
+      .then(() => console.log('Appel créé dans Firestore !'))
+      .catch(err => console.error('Erreur création appel Firestore:', err));
     }
 
     function updateTimer() {
