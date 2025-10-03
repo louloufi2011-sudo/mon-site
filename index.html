@@ -92,11 +92,12 @@
       display: flex;
       justify-content: center;
       align-items: center;
+      border: none;
     }
 
-    .speaker { background: #ccc; }
-    .micro { background: #ccc; }
-    .hangup { background: #ff5a5a; color: white; }
+    .answer { background: green; color: white; }
+    .hangup { background: red; color: white; }
+    .speaker, .micro { background: #ccc; }
   </style>
 </head>
 <body>
@@ -121,7 +122,8 @@
     <div class="call-buttons">
       <button class="speaker" onclick="toggleSpeaker()">🔊</button>
       <button class="micro" onclick="toggleMic()">🎤</button>
-      <button class="hangup" onclick="endCall()">📞</button>
+      <button class="answer" onclick="answerCall()">📞</button>
+      <button class="hangup" onclick="endCall()">📴</button>
     </div>
   </div>
 
@@ -137,6 +139,11 @@
     };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
+
+    // Variables globales
+    let callInterval;
+    let seconds = 0;
+    let currentCallId = null;
 
     // Envoyer un message
     function sendMessage() {
@@ -156,45 +163,76 @@
       .catch(err => alert('Erreur: '+err));
     }
 
-    // Appel
-    let callInterval;
-    let seconds = 0;
-
+    // Démarrer un appel
     function startCall() {
       const caller = document.getElementById('callerName').value || 'Quelqu’un';
-
-      // 1️⃣ Affichage pop-up local
-      document.getElementById('callTitle').innerText = `Appel de ${caller}`;
-      document.getElementById('callPopup').style.display = 'block';
-      seconds = 0;
-      updateTimer();
-      callInterval = setInterval(() => {
-        seconds++;
-        updateTimer();
-      }, 1000);
-
-      // 2️⃣ Créer un document dans Firestore pour que l'app Android détecte l'appel
       db.collection('calls').add({
         caller: caller,
-        timestamp: firebase.firestore.FieldValue.serverTimestamp()
-      })
-      .then(() => console.log('Appel créé dans Firestore !'))
-      .catch(err => console.error('Erreur création appel Firestore:', err));
+        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+        status: "ringing"
+      }).then(docRef => {
+        currentCallId = docRef.id;
+        document.getElementById('callTitle').innerText = `Appel de ${caller}`;
+        document.getElementById('callPopup').style.display = 'block';
+        seconds = 0;
+        updateTimer();
+      }).catch(err => console.error('Erreur création appel Firestore:', err));
     }
 
+    // Timer
     function updateTimer() {
       const m = String(Math.floor(seconds/60)).padStart(2,'0');
       const s = String(seconds%60).padStart(2,'0');
       document.getElementById('callTimer').innerText = `${m}:${s}`;
     }
 
-    function endCall() {
-      document.getElementById('callPopup').style.display = 'none';
-      clearInterval(callInterval);
+    // Répondre à l'appel
+    function answerCall() {
+      if (!currentCallId) return;
+      db.collection('calls').doc(currentCallId).update({status: "answered"});
     }
 
+    // Terminer l'appel
+    function endCall() {
+      if (currentCallId) {
+        db.collection('calls').doc(currentCallId).update({status: "ended"});
+      }
+      clearInterval(callInterval);
+      callInterval = null;
+      document.getElementById('callPopup').style.display = 'none';
+      seconds = 0;
+      updateTimer();
+      currentCallId = null;
+    }
+
+    // Toggle speaker/micro (local uniquement)
     function toggleSpeaker() { alert('Haut-parleur togglé'); }
     function toggleMic() { alert('Micro togglé'); }
+
+    // Listener Firestore pour synchroniser status
+    db.collection('calls').onSnapshot(snapshot => {
+      snapshot.docChanges().forEach(change => {
+        const data = change.doc.data();
+        const callId = change.doc.id;
+        if (callId !== currentCallId) return;
+
+        if (data.status === "answered" && !callInterval) {
+          callInterval = setInterval(() => {
+            seconds++;
+            updateTimer();
+          }, 1000);
+        }
+
+        if (data.status === "ended") {
+          clearInterval(callInterval);
+          callInterval = null;
+          document.getElementById('callPopup').style.display = 'none';
+          seconds = 0;
+          updateTimer();
+          currentCallId = null;
+        }
+      });
+    });
   </script>
 
 </body>
