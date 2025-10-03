@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tablette Mamie</title>
+  <title>Tablette Françoise</title>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <style>
@@ -16,7 +16,6 @@
       height: 100vh;
       margin: 0;
     }
-
     .container {
       background: #fff;
       padding: 30px;
@@ -26,12 +25,10 @@
       width: 90%;
       text-align: center;
     }
-
     h1 {
       color: #ff5a5a;
       margin-bottom: 20px;
     }
-
     input {
       width: 80%;
       padding: 12px;
@@ -40,7 +37,6 @@
       border: 1px solid #ccc;
       font-size: 16px;
     }
-
     button {
       width: 50%;
       padding: 12px;
@@ -53,12 +49,9 @@
       cursor: pointer;
       transition: background 0.3s;
     }
-
     button:hover {
       background-color: #e04848;
     }
-
-    /* Pop-up Appel */
     #callPopup {
       position: fixed;
       top: 50%;
@@ -73,17 +66,14 @@
       text-align: center;
       width: 250px;
     }
-
     #callPopup h2 {
       margin: 0 0 10px 0;
     }
-
     .call-buttons {
       display: flex;
       justify-content: space-around;
       margin-top: 20px;
     }
-
     .call-buttons button {
       width: 60px;
       height: 60px;
@@ -94,16 +84,14 @@
       align-items: center;
       border: none;
     }
-
     .answer { background: green; color: white; }
     .hangup { background: red; color: white; }
     .speaker, .micro { background: #ccc; }
   </style>
 </head>
 <body>
-
   <div class="container">
-    <h1>Envoyer un message à Mamie</h1>
+    <h1>Envoyer un message à Françoise</h1>
     <input type="text" id="nom" placeholder="Nom de l'émetteur">
     <input type="text" id="message" placeholder="Contenu du message">
     <button onclick="sendMessage()">Envoyer</button>
@@ -115,13 +103,13 @@
     <button onclick="startCall()">Appeler</button>
   </div>
 
-  <!-- Pop-up Appel -->
   <div id="callPopup">
     <h2 id="callTitle">Appel de ...</h2>
     <p id="callTimer">00:00</p>
     <div class="call-buttons">
       <button class="speaker" onclick="toggleSpeaker()">🔊</button>
       <button class="micro" onclick="toggleMic()">🎤</button>
+      <button class="answer" onclick="answerCall()">📞</button>
       <button class="hangup" onclick="endCall()">📴</button>
     </div>
   </div>
@@ -139,43 +127,46 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    let callInterval;
+    let callInterval = null;
     let seconds = 0;
     let currentCallId = null;
 
-    // Envoyer un message
     function sendMessage() {
       const nom = document.getElementById('nom').value;
       const texte = document.getElementById('message').value;
-      if (!nom || !texte) return alert('Remplissez les deux champs !');
+      if(!nom || !texte) return alert('Remplissez les deux champs !');
       db.collection('messagesweb').add({
         auteur: nom,
         texte: texte,
         date: firebase.firestore.FieldValue.serverTimestamp()
-      })
-      .then(() => {
+      }).then(() => {
         alert('Message envoyé !');
         document.getElementById('nom').value='';
         document.getElementById('message').value='';
-      })
-      .catch(err => alert('Erreur: '+err));
+      }).catch(err => alert('Erreur: '+err));
     }
 
-    // Démarrer un appel
     function startCall() {
       const caller = document.getElementById('callerName').value || 'Quelqu’un';
-      db.collection('calls').add({
-        caller: caller,
-        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-        status: "ringing"
-      }).then(docRef => {
-        console.log('Appel créé dans Firestore !');
-        currentCallId = docRef.id;
-        document.getElementById('callTitle').innerText = `Appel de ${caller}`;
-        document.getElementById('callPopup').style.display = 'block';
-        seconds = 0;
-        updateTimer();
-      }).catch(err => console.error('Erreur création appel Firestore:', err));
+      // Vérifier si Françoise est disponible
+      db.collection('users').doc('francoise').get().then(doc => {
+        if(doc.exists && doc.data().status === "busy") {
+          alert("Françoise est occupée !");
+          return;
+        }
+        // Créer l'appel
+        db.collection('calls').add({
+          caller: caller,
+          timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+          status: "ringing"
+        }).then(docRef => {
+          currentCallId = docRef.id;
+          document.getElementById('callTitle').innerText = `Appel de ${caller}`;
+          document.getElementById('callPopup').style.display = 'block';
+          seconds = 0;
+          updateTimer();
+        });
+      });
     }
 
     function updateTimer() {
@@ -184,51 +175,61 @@
       document.getElementById('callTimer').innerText = `${m}:${s}`;
     }
 
+    function answerCall() {
+      if(!currentCallId) return;
+      db.collection('calls').doc(currentCallId).update({status: "answered"});
+      // Mettre Françoise occupée
+      db.collection('users').doc('francoise').set({status: "busy", currentCallId: currentCallId});
+      if(!callInterval) {
+        callInterval = setInterval(() => {
+          seconds++;
+          updateTimer();
+        },1000);
+      }
+    }
+
     function endCall() {
-      if (currentCallId) {
-        db.collection('calls').doc(currentCallId).update({status: "ended"});
+      if(currentCallId) {
+        db.collection('calls').doc(currentCallId).update({status:"ended"});
+        db.collection('users').doc('francoise').set({status: "available", currentCallId: null});
       }
       clearInterval(callInterval);
       callInterval = null;
-      document.getElementById('callPopup').style.display = 'none';
       seconds = 0;
       updateTimer();
+      document.getElementById('callPopup').style.display = 'none';
       currentCallId = null;
     }
 
-    // Toggle speaker/mic (local)
-    function toggleSpeaker() { alert('Haut-parleur togglé'); }
-    function toggleMic() { alert('Micro togglé'); }
+    function toggleSpeaker(){alert("Haut-parleur togglé");}
+    function toggleMic(){alert("Micro togglé");}
 
-    // Firestore listener pour synchroniser tablette et site
-    db.collection('calls').onSnapshot(snapshot => {
-      snapshot.docChanges().forEach(change => {
+    // Listener pour synchroniser tablette ↔ site
+    db.collection('calls').onSnapshot(snapshot=>{
+      snapshot.docChanges().forEach(change=>{
         const data = change.doc.data();
         const callId = change.doc.id;
+        if(callId !== currentCallId) return;
 
-        // On s'intéresse seulement à l'appel courant
-        if (currentCallId && callId !== currentCallId) return;
-
-        // Décroché depuis tablette → lancer le timer
-        if (data.status === "answered" && !callInterval) {
-          callInterval = setInterval(() => {
+        // Si tablette décroche, lancer timer sur le site
+        if(data.status === "answered" && !callInterval) {
+          callInterval = setInterval(()=>{
             seconds++;
             updateTimer();
-          }, 1000);
+          },1000);
         }
 
-        // Raccroché depuis tablette ou site → arrêter tout
-        if (data.status === "ended") {
+        // Si l'appel est terminé depuis la tablette
+        if(data.status === "ended") {
           clearInterval(callInterval);
           callInterval = null;
-          document.getElementById('callPopup').style.display = 'none';
           seconds = 0;
           updateTimer();
+          document.getElementById('callPopup').style.display = 'none';
           currentCallId = null;
         }
       });
     });
   </script>
-
 </body>
 </html>
