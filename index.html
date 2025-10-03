@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tablette Mamie</title>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f2f2f2;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+
+    .container {
+      background: #fff;
+      padding: 30px;
+      border-radius: 15px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+      max-width: 400px;
+      width: 90%;
+      text-align: center;
+    }
+
+    h1 {
+      color: #ff5a5a;
+      margin-bottom: 20px;
+    }
+
+    input {
+      width: 80%;
+      padding: 12px;
+      margin: 10px 0;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      font-size: 16px;
+    }
+
+    button {
+      width: 50%;
+      padding: 12px;
+      margin-top: 15px;
+      border: none;
+      border-radius: 10px;
+      background-color: #ff5a5a;
+      color: white;
+      font-size: 18px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    button:hover {
+      background-color: #e04848;
+    }
+
+    /* Pop-up Appel */
+    #callPopup {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: #666;
+      color: white;
+      padding: 30px;
+      border-radius: 20px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      display: none;
+      text-align: center;
+      width: 250px;
+    }
+
+    #callPopup h2 {
+      margin: 0 0 10px 0;
+    }
+
+    .call-buttons {
+      display: flex;
+      justify-content: space-around;
+      margin-top: 20px;
+    }
+
+    .call-buttons button {
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      font-size: 24px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .speaker { background: #ccc; }
+    .micro { background: #ccc; }
+    .hangup { background: #ff5a5a; color: white; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h1>Envoyer un message à Mamie</h1>
+    <input type="text" id="nom" placeholder="Nom de l'émetteur">
+    <input type="text" id="message" placeholder="Contenu du message">
+    <button onclick="sendMessage()">Envoyer</button>
+
+    <hr style="margin: 20px 0;">
+
+    <h1>Passer un appel</h1>
+    <input type="text" id="callerName" placeholder="Nom de l'appelant">
+    <button onclick="startCall()">Appeler</button>
+  </div>
+
+  <!-- Pop-up Appel -->
+  <div id="callPopup">
+    <h2 id="callTitle">Appel de ...</h2>
+    <p id="callTimer">00:00</p>
+    <div class="call-buttons">
+      <button class="speaker" onclick="toggleSpeaker()">🔊</button>
+      <button class="micro" onclick="toggleMic()">🎤</button>
+      <button class="hangup" onclick="endCall()">📞</button>
+    </div>
+  </div>
+
+  <script>
+    // Firebase config
+    const firebaseConfig = {
+      apiKey: "AIzaSyAwF9hfWL3RXJKSpdSfyOMrrYHbul2P6-4",
+      authDomain: "tablettemamie-c19da.firebaseapp.com",
+      projectId: "tablettemamie-c19da",
+      storageBucket: "tablettemamie-c19da.firebasestorage.app",
+      messagingSenderId: "591306595871",
+      appId: "1:591306595871:web:214f911c0821e140283f2a"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    function sendMessage() {
+      const nom = document.getElementById('nom').value;
+      const texte = document.getElementById('message').value;
+      if (!nom || !texte) return alert('Remplissez les deux champs !');
+      db.collection('messagesweb').add({auteur: nom, texte: texte, date: firebase.firestore.FieldValue.serverTimestamp()})
+        .then(() => { alert('Message envoyé !'); document.getElementById('nom').value=''; document.getElementById('message').value=''; })
+        .catch(err => alert('Erreur: '+err));
+    }
+
+    // Appel
+    let callInterval;
+    let seconds = 0;
+
+    function startCall() {
+      const caller = document.getElementById('callerName').value || 'Quelqu’un';
+      document.getElementById('callTitle').innerText = `Appel de ${caller}`;
+      document.getElementById('callPopup').style.display = 'block';
+      seconds = 0;
+      updateTimer();
+      callInterval = setInterval(() => {
+        seconds++;
+        updateTimer();
+      }, 1000);
+    }
+
+    function updateTimer() {
+      const m = String(Math.floor(seconds/60)).padStart(2,'0');
+      const s = String(seconds%60).padStart(2,'0');
+      document.getElementById('callTimer').innerText = `${m}:${s}`;
+    }
+
+    function endCall() {
+      document.getElementById('callPopup').style.display = 'none';
+      clearInterval(callInterval);
+    }
+
+    function toggleSpeaker() { alert('Haut-parleur togglé'); }
+    function toggleMic() { alert('Micro togglé'); }
+  </script>
+
+</body>
+</html>
