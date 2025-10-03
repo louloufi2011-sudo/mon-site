@@ -140,6 +140,7 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
+    // Variables globales
     let callInterval;
     let seconds = 0;
     let currentCallId = null;
@@ -192,15 +193,20 @@
       if (currentCallId) {
         db.collection('calls').doc(currentCallId).update({status: "ended"});
       }
+      clearInterval(callInterval);
+      callInterval = null;
+      document.getElementById('callPopup').style.display = 'none';
+      seconds = 0;
+      updateTimer();
+      currentCallId = null;
     }
 
     // Toggle speaker/micro (local uniquement)
     function toggleSpeaker() { alert('Haut-parleur togglé'); }
     function toggleMic() { alert('Micro togglé'); }
 
-    // Listener Firestore pour synchroniser status
-    db.collection('calls')
-      .orderBy("timestamp")
+    // Listener Firestore pour synchroniser status et démarrer le timer automatiquement
+    db.collection('calls').orderBy("timestamp")
       .onSnapshot(snapshot => {
         const lastCallDoc = snapshot.docs[snapshot.docs.length - 1];
         if (!lastCallDoc) return;
@@ -208,23 +214,23 @@
         const data = lastCallDoc.data();
         const callId = lastCallDoc.id;
 
-        // Nouveau call → mémoriser l'ID et afficher pop-up
+        // Nouveau call → pop-up + timer auto
         if (currentCallId !== callId) {
           currentCallId = callId;
           document.getElementById('callTitle').innerText = `Appel de ${data.caller}`;
           document.getElementById('callPopup').style.display = 'block';
           seconds = 0;
           updateTimer();
+
+          if (!callInterval) {
+            callInterval = setInterval(() => {
+              seconds++;
+              updateTimer();
+            }, 1000);
+          }
         }
 
-        // Status changé → actions
-        if (data.status === "answered" && !callInterval) {
-          callInterval = setInterval(() => {
-            seconds++;
-            updateTimer();
-          }, 1000);
-        }
-
+        // Appel terminé → stop tout
         if (data.status === "ended") {
           clearInterval(callInterval);
           callInterval = null;
