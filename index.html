@@ -122,7 +122,6 @@
     <div class="call-buttons">
       <button class="speaker" onclick="toggleSpeaker()">🔊</button>
       <button class="micro" onclick="toggleMic()">🎤</button>
-      <button class="answer" onclick="answerCall()">📞</button>
       <button class="hangup" onclick="endCall()">📴</button>
     </div>
   </div>
@@ -144,6 +143,7 @@
     let seconds = 0;
     let currentCallId = null;
 
+    // Envoyer un message
     function sendMessage() {
       const nom = document.getElementById('nom').value;
       const texte = document.getElementById('message').value;
@@ -152,13 +152,16 @@
         auteur: nom,
         texte: texte,
         date: firebase.firestore.FieldValue.serverTimestamp()
-      }).then(() => {
+      })
+      .then(() => {
         alert('Message envoyé !');
         document.getElementById('nom').value='';
         document.getElementById('message').value='';
-      }).catch(err => alert('Erreur: '+err));
+      })
+      .catch(err => alert('Erreur: '+err));
     }
 
+    // Démarrer un appel
     function startCall() {
       const caller = document.getElementById('callerName').value || 'Quelqu’un';
       db.collection('calls').add({
@@ -181,11 +184,6 @@
       document.getElementById('callTimer').innerText = `${m}:${s}`;
     }
 
-    function answerCall() {
-      if (!currentCallId) return;
-      db.collection('calls').doc(currentCallId).update({status: "answered"});
-    }
-
     function endCall() {
       if (currentCallId) {
         db.collection('calls').doc(currentCallId).update({status: "ended"});
@@ -198,17 +196,20 @@
       currentCallId = null;
     }
 
+    // Toggle speaker/mic (local)
     function toggleSpeaker() { alert('Haut-parleur togglé'); }
     function toggleMic() { alert('Micro togglé'); }
 
-    // Synchronisation Firestore
+    // Firestore listener pour synchroniser tablette et site
     db.collection('calls').onSnapshot(snapshot => {
       snapshot.docChanges().forEach(change => {
         const data = change.doc.data();
         const callId = change.doc.id;
-        if (callId !== currentCallId) return;
 
-        // Timer démarre uniquement quand la tablette décroche
+        // On s'intéresse seulement à l'appel courant
+        if (currentCallId && callId !== currentCallId) return;
+
+        // Décroché depuis tablette → lancer le timer
         if (data.status === "answered" && !callInterval) {
           callInterval = setInterval(() => {
             seconds++;
@@ -216,7 +217,7 @@
           }, 1000);
         }
 
-        // Raccrocher ferme pop-up et stop timer
+        // Raccroché depuis tablette ou site → arrêter tout
         if (data.status === "ended") {
           clearInterval(callInterval);
           callInterval = null;
