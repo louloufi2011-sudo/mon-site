@@ -140,12 +140,10 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    // Variables globales
     let callInterval;
     let seconds = 0;
     let currentCallId = null;
 
-    // Envoyer un message
     function sendMessage() {
       const nom = document.getElementById('nom').value;
       const texte = document.getElementById('message').value;
@@ -154,16 +152,13 @@
         auteur: nom,
         texte: texte,
         date: firebase.firestore.FieldValue.serverTimestamp()
-      })
-      .then(() => {
+      }).then(() => {
         alert('Message envoyé !');
         document.getElementById('nom').value='';
         document.getElementById('message').value='';
-      })
-      .catch(err => alert('Erreur: '+err));
+      }).catch(err => alert('Erreur: '+err));
     }
 
-    // Démarrer un appel
     function startCall() {
       const caller = document.getElementById('callerName').value || 'Quelqu’un';
       db.collection('calls').add({
@@ -172,23 +167,25 @@
         status: "ringing"
       }).then(docRef => {
         console.log('Appel créé dans Firestore !');
+        currentCallId = docRef.id;
+        document.getElementById('callTitle').innerText = `Appel de ${caller}`;
+        document.getElementById('callPopup').style.display = 'block';
+        seconds = 0;
+        updateTimer();
       }).catch(err => console.error('Erreur création appel Firestore:', err));
     }
 
-    // Timer
     function updateTimer() {
       const m = String(Math.floor(seconds/60)).padStart(2,'0');
       const s = String(seconds%60).padStart(2,'0');
       document.getElementById('callTimer').innerText = `${m}:${s}`;
     }
 
-    // Répondre à l'appel
     function answerCall() {
       if (!currentCallId) return;
       db.collection('calls').doc(currentCallId).update({status: "answered"});
     }
 
-    // Terminer l'appel
     function endCall() {
       if (currentCallId) {
         db.collection('calls').doc(currentCallId).update({status: "ended"});
@@ -201,36 +198,25 @@
       currentCallId = null;
     }
 
-    // Toggle speaker/micro (local uniquement)
     function toggleSpeaker() { alert('Haut-parleur togglé'); }
     function toggleMic() { alert('Micro togglé'); }
 
-    // Listener Firestore pour synchroniser status et démarrer le timer automatiquement
-    db.collection('calls').orderBy("timestamp")
-      .onSnapshot(snapshot => {
-        const lastCallDoc = snapshot.docs[snapshot.docs.length - 1];
-        if (!lastCallDoc) return;
+    // Synchronisation Firestore
+    db.collection('calls').onSnapshot(snapshot => {
+      snapshot.docChanges().forEach(change => {
+        const data = change.doc.data();
+        const callId = change.doc.id;
+        if (callId !== currentCallId) return;
 
-        const data = lastCallDoc.data();
-        const callId = lastCallDoc.id;
-
-        // Nouveau call → pop-up + timer auto
-        if (currentCallId !== callId) {
-          currentCallId = callId;
-          document.getElementById('callTitle').innerText = `Appel de ${data.caller}`;
-          document.getElementById('callPopup').style.display = 'block';
-          seconds = 0;
-          updateTimer();
-
-          if (!callInterval) {
-            callInterval = setInterval(() => {
-              seconds++;
-              updateTimer();
-            }, 1000);
-          }
+        // Timer démarre uniquement quand la tablette décroche
+        if (data.status === "answered" && !callInterval) {
+          callInterval = setInterval(() => {
+            seconds++;
+            updateTimer();
+          }, 1000);
         }
 
-        // Appel terminé → stop tout
+        // Raccrocher ferme pop-up et stop timer
         if (data.status === "ended") {
           clearInterval(callInterval);
           callInterval = null;
@@ -240,6 +226,7 @@
           currentCallId = null;
         }
       });
+    });
   </script>
 
 </body>
