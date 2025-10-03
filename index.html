@@ -122,6 +122,7 @@
     <div class="call-buttons">
       <button class="speaker" onclick="toggleSpeaker()">🔊</button>
       <button class="micro" onclick="toggleMic()">🎤</button>
+      <button class="answer" onclick="answerCall()">📞</button>
       <button class="hangup" onclick="endCall()">📴</button>
     </div>
   </div>
@@ -139,7 +140,6 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    // Variables globales
     let callInterval;
     let seconds = 0;
     let currentCallId = null;
@@ -170,11 +170,7 @@
         timestamp: firebase.firestore.FieldValue.serverTimestamp(),
         status: "ringing"
       }).then(docRef => {
-        currentCallId = docRef.id;
-        document.getElementById('callTitle').innerText = `Appel de ${caller}`;
-        document.getElementById('callPopup').style.display = 'block';
-        seconds = 0;
-        updateTimer();
+        console.log('Appel créé dans Firestore !');
       }).catch(err => console.error('Erreur création appel Firestore:', err));
     }
 
@@ -196,12 +192,6 @@
       if (currentCallId) {
         db.collection('calls').doc(currentCallId).update({status: "ended"});
       }
-      clearInterval(callInterval);
-      callInterval = null;
-      document.getElementById('callPopup').style.display = 'none';
-      seconds = 0;
-      updateTimer();
-      currentCallId = null;
     }
 
     // Toggle speaker/micro (local uniquement)
@@ -209,12 +199,25 @@
     function toggleMic() { alert('Micro togglé'); }
 
     // Listener Firestore pour synchroniser status
-    db.collection('calls').onSnapshot(snapshot => {
-      snapshot.docChanges().forEach(change => {
-        const data = change.doc.data();
-        const callId = change.doc.id;
-        if (callId !== currentCallId) return;
+    db.collection('calls')
+      .orderBy("timestamp")
+      .onSnapshot(snapshot => {
+        const lastCallDoc = snapshot.docs[snapshot.docs.length - 1];
+        if (!lastCallDoc) return;
 
+        const data = lastCallDoc.data();
+        const callId = lastCallDoc.id;
+
+        // Nouveau call → mémoriser l'ID et afficher pop-up
+        if (currentCallId !== callId) {
+          currentCallId = callId;
+          document.getElementById('callTitle').innerText = `Appel de ${data.caller}`;
+          document.getElementById('callPopup').style.display = 'block';
+          seconds = 0;
+          updateTimer();
+        }
+
+        // Status changé → actions
         if (data.status === "answered" && !callInterval) {
           callInterval = setInterval(() => {
             seconds++;
@@ -231,7 +234,6 @@
           currentCallId = null;
         }
       });
-    });
   </script>
 
 </body>
